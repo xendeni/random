@@ -26,22 +26,22 @@ library.theme = {
     tilesize = 90,
     cursor = true,
     cursorimg = "https://t0.rbxcdn.com/42f66da98c40252ee151326a82aab51f",
-    backgroundcolor = Color3.fromRGB(20, 20, 20),
-    tabstextcolor = Color3.fromRGB(240, 240, 240),
-    bordercolor = Color3.fromRGB(60, 60, 60),
-    accentcolor = Color3.fromRGB(28, 56, 139),
-    accentcolor2 = Color3.fromRGB(16, 31, 78),
-    outlinecolor = Color3.fromRGB(60, 60, 60),
+    backgroundcolor = Color3.fromRGB(18, 10, 10),
+    tabstextcolor = Color3.fromRGB(240, 210, 210),
+    bordercolor = Color3.fromRGB(80, 30, 30),
+    accentcolor = Color3.fromRGB(180, 20, 20),
+    accentcolor2 = Color3.fromRGB(100, 10, 10),
+    outlinecolor = Color3.fromRGB(80, 20, 20),
     outlinecolor2 = Color3.fromRGB(0, 0, 0),
-    sectorcolor = Color3.fromRGB(30, 30, 30),
-    toptextcolor = Color3.fromRGB(255, 255, 255),
+    sectorcolor = Color3.fromRGB(28, 12, 12),
+    toptextcolor = Color3.fromRGB(255, 220, 220),
     topheight = 48,
-    topcolor = Color3.fromRGB(30, 30, 30),
-    topcolor2 = Color3.fromRGB(30, 30, 30),
-    buttoncolor = Color3.fromRGB(49, 49, 49),
-    buttoncolor2 = Color3.fromRGB(39, 39, 39),
-    itemscolor = Color3.fromRGB(200, 200, 200),
-    itemscolor2 = Color3.fromRGB(210, 210, 210)
+    topcolor = Color3.fromRGB(35, 10, 10),
+    topcolor2 = Color3.fromRGB(22, 5, 5),
+    buttoncolor = Color3.fromRGB(60, 20, 20),
+    buttoncolor2 = Color3.fromRGB(45, 12, 12),
+    itemscolor = Color3.fromRGB(220, 180, 180),
+    itemscolor2 = Color3.fromRGB(255, 210, 210)
 }
 
 if library.theme.cursor and Drawing then
@@ -240,20 +240,17 @@ function library:CreateWindow(name, size, hidebutton)
     end
     getgenv().uilib = window.Main
 
-    -- Smooth drag system: lerp the frame toward a target position each RenderStepped
+    -- Smooth drag: lerp frame toward target position each RenderStepped
     local dragging, dragInput, dragStart, startPos
-    local dragTargetPos = nil       -- the raw "where it should be" position (Vector2)
-    local DRAG_SMOOTH = 0.18        -- lower = smoother/slower, higher = snappier (0.0–1.0)
+    local dragTargetPos = nil
+    local DRAG_SMOOTH = 0.18 -- lower = floatier, higher = snappier (try 0.08–0.35)
 
-    -- Each RenderStepped, lerp the current position toward the target
     runservice.RenderStepped:Connect(function(dt)
         if dragTargetPos and window.Frame then
             local cur = window.Frame.Position
-            local curX = cur.X.Offset
-            local curY = cur.Y.Offset
-            local alpha = math.min(1, DRAG_SMOOTH * (dt * 60)) -- framerate-independent lerp
-            local newX = curX + (dragTargetPos.X - curX) * alpha
-            local newY = curY + (dragTargetPos.Y - curY) * alpha
+            local alpha = math.min(1, DRAG_SMOOTH * (dt * 60))
+            local newX = cur.X.Offset + (dragTargetPos.X - cur.X.Offset) * alpha
+            local newY = cur.Y.Offset + (dragTargetPos.Y - cur.Y.Offset) * alpha
             window.Frame.Position = UDim2.new(cur.X.Scale, newX, cur.Y.Scale, newY)
         end
     end)
@@ -261,7 +258,6 @@ function library:CreateWindow(name, size, hidebutton)
     uis.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - dragStart
-            -- Update the target position; the RenderStepped loop lerps toward it
             dragTargetPos = Vector2.new(
                 startPos.X.Offset + delta.X,
                 startPos.Y.Offset + delta.Y
@@ -274,13 +270,12 @@ function library:CreateWindow(name, size, hidebutton)
             dragging = true
             dragStart = input.Position
             startPos = window.Frame.Position
-            -- Seed the target to current position to avoid a snap on first drag
             dragTargetPos = Vector2.new(startPos.X.Offset, startPos.Y.Offset)
 
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
-                    dragTargetPos = nil -- stop lerping once released
+                    dragTargetPos = nil
                 end
             end)
         end
@@ -372,13 +367,53 @@ function library:CreateWindow(name, size, hidebutton)
         window.TopGradient.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0.00, theme.topcolor), ColorSequenceKeypoint.new(1.00, theme.topcolor2) })
     end)
 
+    -- Logo: auto-download into honor/ folder, load via getcustomasset
+    local logoFolder = "honor"
+    local logoPath = logoFolder .. "/logo.png"
+    local logoAssetId = "rbxassetid://107869435285902"
+    local logoSize = 28
+
+    pcall(function()
+        if not isfolder(logoFolder) then
+            makefolder(logoFolder)
+        end
+        if not isfile(logoPath) then
+            local logoData = game:HttpGet("https://raw.githubusercontent.com/xendeni/random/main/logo.png", true)
+            writefile(logoPath, logoData)
+        end
+    end)
+
+    window.LogoImage = Instance.new("ImageLabel", window.TopBar)
+    window.LogoImage.Name = "Logo"
+    window.LogoImage.BackgroundTransparency = 1
+    window.LogoImage.BorderSizePixel = 0
+    window.LogoImage.Position = UDim2.fromOffset(4, (window.theme.topheight / 2 - logoSize / 2) / 2)
+    window.LogoImage.Size = UDim2.fromOffset(logoSize, logoSize)
+    window.LogoImage.ZIndex = 10
+    window.LogoImage.ScaleType = Enum.ScaleType.Fit
+
+    -- getcustomasset converts the local file to a usable rbxasset:// URL
+    local logoLoaded = false
+    pcall(function()
+        if isfile(logoPath) and getcustomasset then
+            local assetUrl = getcustomasset(logoPath)
+            if assetUrl and assetUrl ~= "" then
+                window.LogoImage.Image = assetUrl
+                logoLoaded = true
+            end
+        end
+    end)
+    if not logoLoaded then
+        window.LogoImage.Image = logoAssetId
+    end
+
     window.NameLabel = Instance.new("TextLabel", window.TopBar)
     window.NameLabel.TextColor3 = window.theme.toptextcolor
     window.NameLabel.Text = window.name
     window.NameLabel.TextXAlignment = Enum.TextXAlignment.Left
     window.NameLabel.Font = window.theme.font
     window.NameLabel.Name = "title"
-    window.NameLabel.Position = UDim2.fromOffset(4, -2)
+    window.NameLabel.Position = UDim2.fromOffset(logoSize + 8, -2)
     window.NameLabel.BackgroundTransparency = 1
     window.NameLabel.Size = UDim2.fromOffset(190, window.TopBar.AbsoluteSize.Y / 2 - 2)
     window.NameLabel.TextSize = window.theme.titlesize
