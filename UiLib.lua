@@ -75,7 +75,15 @@ function library:CreateWatermark(name, position)
     local gamename = marketplaceservice:GetProductInfo(game.PlaceId).Name
     local watermark = { }
     watermark.Visible = true
-    watermark.text = " " .. name:gsub("{game}", gamename):gsub("{fps}", "0 FPS") .. " "
+
+    local function buildText(fps, ping)
+        local t = name
+        t = t:gsub("{game}", gamename)
+        t = t:gsub("{fps}", (fps or 0) .. " FPS")
+        t = t:gsub("{ping}", (ping or 0) .. " ms")
+        return " " .. t .. " "
+    end
+    watermark.text = buildText(0, 0)
 
     watermark.main = Instance.new("ScreenGui", coregui)
     watermark.main.Name = "Watermark"
@@ -87,7 +95,7 @@ function library:CreateWatermark(name, position)
         getgenv().watermark:Remove()
     end
     getgenv().watermark = watermark.main
-    
+
     watermark.mainbar = Instance.new("Frame", watermark.main)
     watermark.mainbar.Name = "Main"
     watermark.mainbar.BorderColor3 = Color3.fromRGB(80, 80, 80)
@@ -122,7 +130,6 @@ function library:CreateWatermark(name, position)
     watermark.label.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     watermark.label.BackgroundTransparency = 1.000
     watermark.label.Position = UDim2.new(0, 0, 0, 0)
-    watermark.label.Size = UDim2.new(0, 238, 0, 25)
     watermark.label.Font = library.theme.font
     watermark.label.ZIndex = 6
     watermark.label.Visible = watermark.Visible
@@ -131,8 +138,8 @@ function library:CreateWatermark(name, position)
     watermark.label.TextSize = 15
     watermark.label.TextStrokeTransparency = 0.000
     watermark.label.TextXAlignment = Enum.TextXAlignment.Left
-    watermark.label.Size = UDim2.new(0, watermark.label.TextBounds.X+10, 0, 25)
-    
+    watermark.label.Size = UDim2.new(0, watermark.label.TextBounds.X + 10, 0, 25)
+
     watermark.topbar = Instance.new("Frame", watermark.mainbar)
     watermark.topbar.Name = "TopBar"
     watermark.topbar.ZIndex = 6
@@ -141,18 +148,30 @@ function library:CreateWatermark(name, position)
     watermark.topbar.Visible = watermark.Visible
     watermark.topbar.Size = UDim2.new(0, 0, 0, 1)
 
-    watermark.mainbar.Size = UDim2.new(0, watermark.label.TextBounds.X, 0, 25)
-    watermark.topbar.Size = UDim2.new(0, watermark.label.TextBounds.X+6, 0, 1)
-    watermark.Outline.Size = watermark.mainbar.Size + UDim2.fromOffset(2, 2)
-    watermark.BlackOutline.Size = watermark.mainbar.Size + UDim2.fromOffset(4, 4)
+    local function resizeWatermark()
+        watermark.mainbar.Size = UDim2.new(0, watermark.label.TextBounds.X + 4, 0, 25)
+        watermark.label.Size = UDim2.new(0, watermark.label.TextBounds.X + 4, 0, 25)
+        watermark.topbar.Size = UDim2.new(0, watermark.label.TextBounds.X + 6, 0, 1)
+        watermark.Outline.Size = watermark.mainbar.Size + UDim2.fromOffset(2, 2)
+        watermark.BlackOutline.Size = watermark.mainbar.Size + UDim2.fromOffset(4, 4)
+    end
+    resizeWatermark()
 
-    watermark.mainbar.Size = UDim2.new(0, watermark.label.TextBounds.X+4, 0, 25)    
-    watermark.label.Size = UDim2.new(0, watermark.label.TextBounds.X+4, 0, 25)
-    watermark.topbar.Size = UDim2.new(0, watermark.label.TextBounds.X+6, 0, 1)
-    watermark.Outline.Size = watermark.mainbar.Size + UDim2.fromOffset(2, 2)
-    watermark.BlackOutline.Size = watermark.mainbar.Size + UDim2.fromOffset(4, 4)
+    -- FPS + Ping counter
+    local startTime, fpsCounter, oldfps = os.clock(), 0, nil
+    local pingValue = 0
 
-    local startTime, counter, oldfps = os.clock(), 0, nil
+    -- Ping: sample every 5s via a stats check
+    local statsOk, stats = pcall(function() return game:GetService("Stats") end)
+    local function updatePing()
+        if statsOk and stats then
+            local ok, p = pcall(function()
+                return math.floor(stats.Network.ServerStatsItem["Data Ping"].Value)
+            end)
+            if ok then pingValue = p end
+        end
+    end
+
     runservice.Heartbeat:Connect(function()
         watermark.label.Visible = watermark.Visible
         watermark.mainbar.Visible = watermark.Visible
@@ -160,30 +179,21 @@ function library:CreateWatermark(name, position)
         watermark.Outline.Visible = watermark.Visible
         watermark.BlackOutline.Visible = watermark.Visible
 
-        if not name:find("{fps}") then
-            watermark.label.Text = " " .. name:gsub("{game}", gamename):gsub("{fps}", "0 FPS") .. " "
-        end
+        fpsCounter = fpsCounter + 1
+        local currentTime = os.clock()
 
-        if name:find("{fps}") then
-            local currentTime = os.clock()
-            counter = counter + 1
-            if currentTime - startTime >= 1 then 
-                local fps = math.floor(counter / (currentTime - startTime))
-                counter = 0
-                startTime = currentTime
+        if currentTime - startTime >= 1 then
+            local fps = math.floor(fpsCounter / (currentTime - startTime))
+            fpsCounter = 0
+            startTime = currentTime
+            updatePing()
 
-                if fps ~= oldfps then
-                    watermark.label.Text = " " .. name:gsub("{game}", gamename):gsub("{fps}", fps .. " FPS") .. " "
-        
-                    watermark.label.Size = UDim2.new(0, watermark.label.TextBounds.X+10, 0, 25)
-                    watermark.mainbar.Size = UDim2.new(0, watermark.label.TextBounds.X, 0, 25)
-                    watermark.topbar.Size = UDim2.new(0, watermark.label.TextBounds.X, 0, 1)
-
-                    watermark.Outline.Size = watermark.mainbar.Size + UDim2.fromOffset(2, 2)
-                    watermark.BlackOutline.Size = watermark.mainbar.Size + UDim2.fromOffset(4, 4)
-                end
-                oldfps = fps
+            local newText = buildText(fps, pingValue)
+            if newText ~= watermark.label.Text then
+                watermark.label.Text = newText
+                resizeWatermark()
             end
+            oldfps = fps
         end
     end)
 
@@ -194,7 +204,7 @@ function library:CreateWatermark(name, position)
         tweenservice:Create(watermark.Outline, TweenInfo.new(0.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), { BackgroundTransparency = 1, Active = false }):Play()
         tweenservice:Create(watermark.BlackOutline, TweenInfo.new(0.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), { BackgroundTransparency = 1, Active = false }):Play()
     end)
-    
+
     watermark.mainbar.MouseLeave:Connect(function()
         tweenservice:Create(watermark.mainbar, TweenInfo.new(0.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), { BackgroundTransparency = 0, Active = true }):Play()
         tweenservice:Create(watermark.topbar, TweenInfo.new(0.1, Enum.EasingStyle.Linear, Enum.EasingDirection.In), { BackgroundTransparency = 0, Active = true }):Play()
@@ -387,7 +397,7 @@ function library:CreateWindow(name, size, hidebutton)
     window.LogoImage.Name = "Logo"
     window.LogoImage.BackgroundTransparency = 1
     window.LogoImage.BorderSizePixel = 0
-    window.LogoImage.Position = UDim2.fromOffset(4, (window.theme.topheight / 2 - logoSize / 2) / 2)
+    window.LogoImage.Position = UDim2.fromOffset(8, math.floor((window.theme.topheight / 2 - logoSize) / 2) + 2)
     window.LogoImage.Size = UDim2.fromOffset(logoSize, logoSize)
     window.LogoImage.ZIndex = 10
     window.LogoImage.ScaleType = Enum.ScaleType.Fit
@@ -413,7 +423,7 @@ function library:CreateWindow(name, size, hidebutton)
     window.NameLabel.TextXAlignment = Enum.TextXAlignment.Left
     window.NameLabel.Font = window.theme.font
     window.NameLabel.Name = "title"
-    window.NameLabel.Position = UDim2.fromOffset(logoSize + 8, -2)
+    window.NameLabel.Position = UDim2.fromOffset(logoSize + 14, -2)
     window.NameLabel.BackgroundTransparency = 1
     window.NameLabel.Size = UDim2.fromOffset(190, window.TopBar.AbsoluteSize.Y / 2 - 2)
     window.NameLabel.TextSize = window.theme.titlesize
